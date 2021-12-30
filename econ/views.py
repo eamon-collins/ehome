@@ -3,27 +3,63 @@ from django.http import HttpResponse, JsonResponse
 import requests
 from datetime import date, datetime
 from bs4 import BeautifulSoup
+from random import randint
+
+from .models import Article, Issue
 
 from selenium import webdriver
+
+#relative import to private tool
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'alibabble'))
+import playback as Playback
 
 
 
 # Create your views here.
 def index(request):
 	#diagresults = scrape()
-	selenlogin = login()
-	return selenlogin
+	scrape("2022-01-01")
 	return HttpResponse("Under construction")
 
-
-def login():
+def scrape(edition_date):
+	#start a browser session
 	chrome_options = webdriver.ChromeOptions()
 	chrome_options.add_argument("--disable-infobars")
-	browser = webdriver.Chrome('/home/eamon/Downloads/chromedriver', chrome_options=chrome_options)
-	loginurl = 'https://authenticate.economist.com/login'
+	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
+
+	#this logs in and should leave you on home page
+	login(browser)
+
+	weekly_edition = "https://www.economist.com/weeklyedition/"+edition_date#datetime.date("2022-01-01").isoformat()
+	browser.get(weekly_edition)
+
+	try:
+		title = browser.find_element_by_class_name("weekly-edition-header__headline")
+	except Exception as e:
+		title = "Couldn't find"
+	issue = Issue.objects.create(
+		title = title,
+		date = edition_date
+		)
+
+	#Now compose a list of articles in the latest weekly issue
+
+
+def login(browser):
+	loginurl = 'https://economist.com'
 	browser.get(loginurl)
 
-def scrape():
+	#execute manual one of 3 manual recordings
+	rec_path = "econ/recordings/login" + str(randint(1,3)) +".rec"
+	#rec_path = "econ/recordings/loginfast.rec"
+	Playback.playback(os.path.abspath(rec_path), 1)
+ 
+
+
+
+def OLD_scrape():
 	#if it's saturday
 	if datetime.now().weekday() == 5 or True:
 

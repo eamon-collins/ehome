@@ -1,3 +1,7 @@
+#my stuff
+#no recordings, they can have sensitive info
+*.rec
+
 ###OSX ###
 .DS_Store
 .AppleDouble
