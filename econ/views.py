@@ -23,6 +23,28 @@ def index(request):
 	scrape("2022-01-01")
 	return HttpResponse("Under construction")
 
+def scrape_article(browser, issue, article_url):
+	browser.get(article_url)
+	print(article_url)
+
+	article = Article()
+
+	article.title = browser.find_element_by_class_name("article__headline").text
+	article.sub_title = browser.find_element_by_class_name("article__subheadline").text
+	article.issue = issue
+	article.description = browser.find_element_by_class_name("article__description").text 
+
+	#piece together the article text
+	article_string = ""
+	for text_piece in browser.find_elements_by_class_name("article__body-text"):
+		print(text_piece.text)
+		article_string += text_piece.text 
+
+
+
+
+
+
 def scrape(edition_date):
 	#start a browser session
 	chrome_options = webdriver.ChromeOptions()
@@ -36,15 +58,34 @@ def scrape(edition_date):
 	browser.get(weekly_edition)
 
 	try:
-		title = browser.find_element_by_class_name("weekly-edition-header__headline")
+		title = browser.find_element_by_class_name("weekly-edition-header__headline").text
 	except Exception as e:
 		title = "Couldn't find"
 	issue = Issue.objects.create(
 		title = title,
 		date = edition_date
 		)
+	print(title + repr(edition_date))
+	issue.save()
+
+	#select articles and scrape them
+	headline_elements = browser.find_elements_by_class_name("headline-link")
+
+	#necessary to get links first so don't get StaleElements
+	article_links = []
+	for headline in headline_elements:
+		article_links.append(headline.get_attribute("href"))
+	article_objects = []
+	for link in article_links:
+		article_objects.append(scrape_article(browser, issue, link))
+		
+
+	Article.objects.bulk_create(article_objects)
+
+
 
 	#Now compose a list of articles in the latest weekly issue
+
 
 
 def login(browser):

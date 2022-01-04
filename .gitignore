@@ -1,6 +1,7 @@
 #my stuff
 #no recordings, they can have sensitive info
 *.rec
+migrations/
 
 ###OSX ###
 .DS_Store
