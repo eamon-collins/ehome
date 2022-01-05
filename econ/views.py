@@ -40,7 +40,7 @@ def scrape_article(browser, issue, article_url):
 	if dupes.count() and not OVERWRITE:
 		print("This article url exists in our database, skipping")
 		return None
-	elif dupes.count(): #doesnt really
+	elif dupes.count(): #doesnt really overwrite
 		print("This article url exists, re-scraping and overwriting")
 		return dupes.get()
 
@@ -54,14 +54,18 @@ def scrape_article(browser, issue, article_url):
 	article.sub_title = browser.find_element_by_class_name("article__subheadline").text
 	article.issue = issue
 	article.description = browser.find_element_by_class_name("article__description").text 
+	article.url = article_url
 
-	#piece together the article text
+
+	#piece together the article text, they break it up for ads and such
 	article_string = ""
-	for text_piece in browser.find_elements_by_class_name("article__body-text"):
+	pieces = browser.find_elements_by_class_name("article__body-text")
+	for text_piece in pieces:
 		#print(text_piece.text)
 		try:
 			article_string += text_piece.text 
 			article_string += "\n"
+			print("SUCCESSFUL")
 		except StaleElementReferenceException as e:
 			print("Stale element exception in article scraping url: " + article_url)
 
@@ -116,8 +120,10 @@ def scrape(edition_date):
 		article = scrape_article(browser, issue, link)
 		if article: #makes sure a None was not returned, which denotes a skip.
 			article_objects.append(article)
+			article.save()
 		
-	Article.objects.bulk_create(article_objects)
+	#dont really need this and simpler without, never going to need speed
+	#Article.objects.bulk_create(article_objects)
 
 
 
