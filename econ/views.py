@@ -51,17 +51,6 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 		return dupes.get()
 
 
-
-
-	article = Article()
-
-	article.title = browser.find_element_by_class_name("article__headline").text
-	article.sub_title = browser.find_element_by_class_name("article__subheadline").text
-	article.issue = issue
-	article.description = browser.find_element_by_class_name("article__description").text 
-	article.url = article_url
-	article.html = browser.page_source
-
 	#test if it's logged me out, get back in by simply clicking login
 	try:
 		regwall = browser.find_element_by_id('tp-regwall')
@@ -72,22 +61,46 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 		#loginlink.click()
 		print("Logged back in")
 	except NoSuchElementException as e:
-		print(e)
+		print("No paywall present")
 		pass
+
+	#start building the article object
+	article = Article()
+	textbased = True
+
+	article.title = browser.find_element_by_class_name("article__headline").text
+	article.sub_title = browser.find_element_by_class_name("article__subheadline").text
+	article.issue = issue
+	try:
+		article.description = browser.find_element_by_class_name("article__description").text 
+	except NoSuchElementException as e:
+		textbased = False
+	article.url = article_url
+	article.html = browser.page_source
+
 
 	#piece together the article text, they break it up for ads and such
 	article_string = ""
-	pieces = browser.find_elements_by_class_name("article__body-text")
-	for text_piece in pieces:
-		#print(text_piece.text)
-		try:
-			article_string += text_piece.text 
-			article_string += "\n"
-			print("SUCCESSFUL")
-		except StaleElementReferenceException as e:
-			print("Stale element exception in article scraping url: " + article_url)
 
-	article.text = article_string
+	try: 
+		pieces = browser.find_elements_by_class_name("article__body-text")
+	except NoSuchElementException as e:
+		textbased = False 
+	if textbased:
+		for text_piece in pieces:
+			#print(text_piece.text)
+			try:
+				article_string += text_piece.text 
+				article_string += "\n"
+				print("SUCCESSFUL")
+			except StaleElementReferenceException as e:
+				print("Stale element exception in article scraping url: " + article_url)
+		article.text = article_string
+	else:
+		#not text based, for now just return, will want to harvest pictures later
+		return None
+		
+	
 	#go back to before the click
 	#browser.execute_script("window.history.go(-1)")
 
@@ -140,8 +153,8 @@ def scrape(edition_date):
 		article_links.append(headline.get_attribute("href"))
 	article_objects = []
 	for count, link in enumerate(article_links):
-		if count > 1: #so debugging is quicker
-			return
+		# if count > 1: #so debugging is quicker
+		# 	return
 		#headline_elements = browser.find_elements_by_class_name("headline-link")
 		article = scrape_article(browser, issue, link)#, headline_elements[count])
 
