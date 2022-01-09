@@ -21,6 +21,9 @@ import playback as Playback
 #or stop and leave the current record. Doesnt really work as true rn
 OVERWRITE = False
 
+STATIC_URL = "static/"
+current_issue = None
+
 
 # Create your views here.
 def index(request):
@@ -76,7 +79,7 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	except NoSuchElementException as e:
 		textbased = False
 	article.url = article_url
-	article.html = browser.page_source
+	article.html = sanitize_html(browser.page_source)
 
 
 	#piece together the article text, they break it up for ads and such
@@ -141,6 +144,9 @@ def scrape(edition_date):
 		print("We already have a record of an issue for this date")
 
 
+	#set a global current issue when we scrape so everyone knows what it is
+	global current_issue
+	current_issue = issue
 
 	#Now compose a list of article links in the latest weekly issue
 	#get articles by following links and scrape them
@@ -183,7 +189,30 @@ def login(browser):
 
 	#rec_path = "econ/recordings/loginfast.rec"
 	Playback.playback(os.path.abspath(rec_path), 1)
- 
+
+
+def sanitize_html(html):
+	soup = BeautifulSoup(html, "lxml")
+
+	#remove all script tags
+	for s in soup.select('script'):
+		s.extract()
+
+	#try to remove interruptive ads
+	for ad in soup.find_all("div", {"class": "advert"}):
+		ad.extract()
+
+	global current_issue
+	#store images
+	for img in soup.select('img'):
+		orig_link = img['src']
+
+		my_link = orig_link[orig_link.index(".com")+5].replace("/","_")
+		my_link = STATIC_URL + current_issue.date.strftime("%d-%m-%Y") + my_link
+		#if this is the first image of an edition, we need to create a folder for it
+		if not os.path.isfile(STATIC_URL + current_issue.date.strftime("%d-%m-%Y")):
+			os.mkdir(STATIC_URL + current_issue.date.strftime("%d-%m-%Y"))
+ 		img['src'] = my_link
 
 #debugging method to simply open up a browser with economist.com
 #helps get a browser in the right position to record login mouse
