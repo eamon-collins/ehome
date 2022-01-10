@@ -22,7 +22,7 @@ import playback as Playback
 #or stop and leave the current record. Doesnt really work as true rn
 OVERWRITE = False
 
-STATIC_URL = "econ/static/"
+STATIC_IMG_URL = "econ/static/img/"
 current_issue = None
 req_session = None
 
@@ -106,8 +106,8 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	#harvest all pictures
 	global current_issue
 	#if this is the first image of an edition, we need to create a folder for it
-	if not os.path.isdir(STATIC_URL + current_issue.date.strftime("%d-%m-%Y")):
-		os.mkdir(STATIC_URL + current_issue.date.strftime("%d-%m-%Y"))
+	if not os.path.isdir(STATIC_IMG_URL + current_issue.date.strftime("%d-%m-%Y")):
+		os.mkdir(STATIC_IMG_URL + current_issue.date.strftime("%d-%m-%Y"))
 
 	try:
 		images = browser.find_elements_by_tag_name("img")
@@ -124,6 +124,7 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 		for link, dest in link_map.items():
 			#see if we've already stored this image
 			if os.path.isfile(dest):
+				print("already have image, skipping")
 				continue
 			#if this doesn't end with an image suffix, we don't want it
 			if not link.lower().endswith(('.png','.jpg','.jpeg')):
@@ -191,8 +192,8 @@ def scrape(edition_date):
 		article_links.append(headline.get_attribute("href"))
 	article_objects = []
 	for count, link in enumerate(article_links):
-		if count > 1: #so debugging is quicker
-			return
+		# if count > 1: #so debugging is quicker
+		# 	return
 		#headline_elements = browser.find_elements_by_class_name("headline-link")
 		article = scrape_article(browser, issue, link)#, headline_elements[count])
 
@@ -243,6 +244,7 @@ def get_logged_requests_session(browser):
 
 
 #turns the economist image link into something we can use to store 
+#only for images atm
 def transform_link(orig_link):
 	my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
 
@@ -250,8 +252,9 @@ def transform_link(orig_link):
 	if diff > 0:
 		my_link = my_link[diff:]
 
+	global current_issue
 
-	my_link = os.path.join(STATIC_URL, current_issue.date.strftime("%d-%m-%Y"), my_link)
+	my_link = os.path.join(STATIC_IMG_URL, current_issue.date.strftime("%d-%m-%Y"), my_link)
 			
 	return my_link
 
@@ -267,7 +270,6 @@ def sanitize_html(html):
 	for ad in soup.find_all("div", {"class": "advert"}):
 		ad.extract()
 
-	global current_issue
 	#change image link so it works with our static path
 	for img in soup.select('img'):
 		orig_link = img['src']

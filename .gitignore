@@ -2,7 +2,7 @@
 #no recordings, they can have sensitive info
 *.rec
 migrations/
-static/
+static/img/
 
 ###OSX ###
 .DS_Store
