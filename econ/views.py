@@ -5,6 +5,7 @@ from datetime import date, datetime
 from bs4 import BeautifulSoup
 from random import randint
 import time
+import requests
 
 from .models import Article, Issue
 
@@ -21,8 +22,9 @@ import playback as Playback
 #or stop and leave the current record. Doesnt really work as true rn
 OVERWRITE = False
 
-STATIC_URL = "static/"
+STATIC_URL = "econ/static/"
 current_issue = None
+req_session = None
 
 
 # Create your views here.
@@ -47,7 +49,7 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	if dupes.count() and not OVERWRITE:
 		print("This article url exists in our database, skipping")
 		#go back to before the click
-		browser.execute_script("window.history.go(-1)")
+		#browser.execute_script("window.history.go(-1)")
 		return None
 	elif dupes.count(): #doesnt really overwrite
 		print("This article url exists, re-scraping and overwriting")
@@ -79,7 +81,9 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	except NoSuchElementException as e:
 		textbased = False
 	article.url = article_url
-	article.html = sanitize_html(browser.page_source)
+	
+
+	print(article.html)
 
 
 	#piece together the article text, they break it up for ads and such
@@ -87,9 +91,6 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 
 	try: 
 		pieces = browser.find_elements_by_class_name("article__body-text")
-	except NoSuchElementException as e:
-		textbased = False 
-	if textbased:
 		for text_piece in pieces:
 			#print(text_piece.text)
 			try:
@@ -99,13 +100,44 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 			except StaleElementReferenceException as e:
 				print("Stale element exception in article scraping url: " + article_url)
 		article.text = article_string
-	else:
-		#not text based, for now just return, will want to harvest pictures later
-		return None
-		
-	
-	#go back to before the click
-	#browser.execute_script("window.history.go(-1)")
+	except NoSuchElementException as e:
+		textbased = False 
+
+	#harvest all pictures
+	global current_issue
+	#if this is the first image of an edition, we need to create a folder for it
+	if not os.path.isdir(STATIC_URL + current_issue.date.strftime("%d-%m-%Y")):
+		os.mkdir(STATIC_URL + current_issue.date.strftime("%d-%m-%Y"))
+
+	try:
+		images = browser.find_elements_by_tag_name("img")
+		link_map = dict()
+		for img in images:
+			orig_link = img.get_attribute("src")
+			my_link = transform_link(orig_link)
+			link_map[orig_link] = my_link
+
+		#now actually visit and screenshot each image
+		#Economist forbids most other automated gets
+		#actually, trying to set up logged requests session
+		s = get_logged_requests_session(browser)
+		for link, dest in link_map.items():
+			#see if we've already stored this image
+			if os.path.isfile(dest):
+				continue
+			#if this doesn't end with an image suffix, we don't want it
+			if not link.lower().endswith(('.png','.jpg','.jpeg')):
+				continue
+
+			imgdata = s.get(link, allow_redirects=True)
+			open(dest, 'wb').write(imgdata.content)
+
+	except NoSuchElementException as e:
+		pass
+
+
+	#This sanitize method alters the html, do it after we extract original info
+	article.html = sanitize_html(browser.page_source)
 
 	return article
 
@@ -159,8 +191,8 @@ def scrape(edition_date):
 		article_links.append(headline.get_attribute("href"))
 	article_objects = []
 	for count, link in enumerate(article_links):
-		# if count > 1: #so debugging is quicker
-		# 	return
+		if count > 1: #so debugging is quicker
+			return
 		#headline_elements = browser.find_elements_by_class_name("headline-link")
 		article = scrape_article(browser, issue, link)#, headline_elements[count])
 
@@ -190,6 +222,39 @@ def login(browser):
 	#rec_path = "econ/recordings/loginfast.rec"
 	Playback.playback(os.path.abspath(rec_path), 1)
 
+def get_logged_requests_session(browser):
+	global req_session 
+
+	if not req_session:
+		
+		headers = {
+			"User-Agent":
+			"Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36"
+		}
+		req_session = requests.session()
+		req_session.headers.update(headers)
+
+
+		for cookie in browser.get_cookies():
+			c = {cookie['name']: cookie['value']}
+			req_session.cookies.update(c)
+
+	return req_session
+
+
+#turns the economist image link into something we can use to store 
+def transform_link(orig_link):
+	my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
+
+	diff = len(my_link) - 150 
+	if diff > 0:
+		my_link = my_link[diff:]
+
+
+	my_link = os.path.join(STATIC_URL, current_issue.date.strftime("%d-%m-%Y"), my_link)
+			
+	return my_link
+
 
 def sanitize_html(html):
 	soup = BeautifulSoup(html, "lxml")
@@ -203,16 +268,15 @@ def sanitize_html(html):
 		ad.extract()
 
 	global current_issue
-	#store images
+	#change image link so it works with our static path
 	for img in soup.select('img'):
 		orig_link = img['src']
 
-		my_link = orig_link[orig_link.index(".com")+5].replace("/","_")
-		my_link = STATIC_URL + current_issue.date.strftime("%d-%m-%Y") + my_link
-		#if this is the first image of an edition, we need to create a folder for it
-		if not os.path.isfile(STATIC_URL + current_issue.date.strftime("%d-%m-%Y")):
-			os.mkdir(STATIC_URL + current_issue.date.strftime("%d-%m-%Y"))
- 		img['src'] = my_link
+		my_link = transform_link(orig_link)
+
+		img['src'] = my_link
+
+	return str(soup)
 
 #debugging method to simply open up a browser with economist.com
 #helps get a browser in the right position to record login mouse
