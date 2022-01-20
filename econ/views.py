@@ -5,6 +5,7 @@ from datetime import date, datetime
 from bs4 import BeautifulSoup
 from random import randint
 import time
+from datetime import datetime
 import requests
 
 from .models import Article, Issue
