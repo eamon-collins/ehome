@@ -10,6 +10,7 @@ import requests
 
 from .models import Article, Issue
 
+
 from selenium import webdriver
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
 
@@ -37,6 +38,68 @@ def index(request):
 	#get_blank_economist_browser()
 
 	return HttpResponse("Under construction")
+
+
+
+def scrape(edition_date):
+	#start a browser session
+	chrome_options = webdriver.ChromeOptions()
+	chrome_options.add_argument("--disable-infobars")
+	chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0")
+	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
+
+	#this logs in and should leave you on home page
+	login(browser)
+
+	weekly_edition = "https://www.economist.com/weeklyedition/"+edition_date#datetime.date("2022-01-01").isoformat()
+	browser.get(weekly_edition)
+
+	try:
+		title = browser.find_element_by_class_name("weekly-edition-header__headline").text
+	except Exception as e:
+		title = "Couldn't find issue title"
+
+	#check for pre-existing issue matching this date in our database
+	dupes = Issue.objects.filter(date = edition_date)
+	if dupes.count() == 0:
+		issue = Issue.objects.create(
+			title = title,
+			date = edition_date
+			)
+		print(title + repr(edition_date))
+		issue.save()
+	else: 
+		issue = dupes.get()
+		print("We already have a record of an issue for this date")
+
+
+	#set a global current issue when we scrape so everyone knows what it is
+	global current_issue
+	current_issue = issue
+
+	#Now compose a list of article links in the latest weekly issue
+	#get articles by following links and scrape them
+	#then save them to db.
+	headline_elements = browser.find_elements_by_class_name("headline-link")
+
+	#necessary to get links first so don't get StaleElements
+	article_links = []
+	for headline in headline_elements:
+		article_links.append(headline.get_attribute("href"))
+	article_objects = []
+	for count, link in enumerate(article_links):
+		# if count > 1: #so debugging is quicker
+		# 	return
+		#headline_elements = browser.find_elements_by_class_name("headline-link")
+		article = scrape_article(browser, issue, link)#, headline_elements[count])
+
+		if article: #makes sure a None was not returned, which denotes a skip.
+			article_objects.append(article)
+			
+		
+	#dont really need this and simpler without, never going to need speed
+	Article.objects.bulk_create(article_objects)
+
 
 def scrape_article(browser, issue, article_url, art_elem=None):
 	browser.get(article_url)
@@ -116,7 +179,8 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 		for img in images:
 			orig_link = img.get_attribute("src")
 			my_link = transform_link(orig_link)
-			link_map[orig_link] = my_link
+			if my_link:
+				link_map[orig_link] = my_link
 
 		#now actually visit and screenshot each image
 		#Economist forbids most other automated gets
@@ -142,72 +206,6 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	article.html = sanitize_html(browser.page_source)
 
 	return article
-
-
-
-
-def scrape(edition_date):
-	#start a browser session
-	chrome_options = webdriver.ChromeOptions()
-	chrome_options.add_argument("--disable-infobars")
-	chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0")
-	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
-
-	#this logs in and should leave you on home page
-	login(browser)
-
-	weekly_edition = "https://www.economist.com/weeklyedition/"+edition_date#datetime.date("2022-01-01").isoformat()
-	browser.get(weekly_edition)
-
-	try:
-		title = browser.find_element_by_class_name("weekly-edition-header__headline").text
-	except Exception as e:
-		title = "Couldn't find issue title"
-
-	#check for pre-existing issue matching this date in our database
-	dupes = Issue.objects.filter(date = edition_date)
-	if dupes.count() == 0:
-		issue = Issue.objects.create(
-			title = title,
-			date = edition_date
-			)
-		print(title + repr(edition_date))
-		issue.save()
-	else: 
-		issue = dupes.get()
-		print("We already have a record of an issue for this date")
-
-
-	#set a global current issue when we scrape so everyone knows what it is
-	global current_issue
-	current_issue = issue
-
-	#Now compose a list of article links in the latest weekly issue
-	#get articles by following links and scrape them
-	#then save them to db.
-	headline_elements = browser.find_elements_by_class_name("headline-link")
-
-	#necessary to get links first so don't get StaleElements
-	article_links = []
-	for headline in headline_elements:
-		article_links.append(headline.get_attribute("href"))
-	article_objects = []
-	for count, link in enumerate(article_links):
-		# if count > 1: #so debugging is quicker
-		# 	return
-		#headline_elements = browser.find_elements_by_class_name("headline-link")
-		article = scrape_article(browser, issue, link)#, headline_elements[count])
-
-		if article: #makes sure a None was not returned, which denotes a skip.
-			article_objects.append(article)
-			
-		
-	#dont really need this and simpler without, never going to need speed
-	Article.objects.bulk_create(article_objects)
-
-
-
-
 
 
 def login(browser):
@@ -247,7 +245,10 @@ def get_logged_requests_session(browser):
 #turns the economist image link into something we can use to store 
 #only for images atm
 def transform_link(orig_link):
-	my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
+	try:
+		my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
+	except ValueError as e:
+		return None
 
 	diff = len(my_link) - 150 
 	if diff > 0:
@@ -276,8 +277,12 @@ def sanitize_html(html):
 		orig_link = img['src']
 
 		my_link = transform_link(orig_link)
+		if my_link:
+			img['src'] = my_link
+		else:
+			img.extract()
 
-		img['src'] = my_link
+		
 
 	return str(soup)
 
