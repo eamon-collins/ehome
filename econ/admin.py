@@ -1,7 +1,9 @@
 from django.contrib import admin
 
-from .models import Issue, Article
+from econ.models import Issue, Article, User, Authenticator
 
 # Register your models here.
 admin.site.register(Issue)
 admin.site.register(Article)
+admin.site.register(User)
+admin.site.register(Authenticator)

@@ -1,0 +1,39 @@
+
+
+{% load static %}
+{% block body_block %}
+<head>
+    <meta charset="UTF-8">
+    <title>Login Here</title>
+</head>
+<body>
+    <div class="container">
+    <div id="heading-breadcrumbs">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-7">
+                        <h1>Login</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="width:400px; margin:0 auto;">
+            <h2>Enter Account Information:</h2>
+            <form method="post">{% csrf_token %}
+                    <div class="well">
+                        {% for field in form %}
+                            <div class="form-group col-xs-12">
+                                {{ field.errors }}
+                                <label>{{ field.label }}:</label>
+                                <div>
+                                    {{ field }}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        <center><input id="submit" type="submit" value="Submit" class="btn btn-info"/></center>
+                    </div>
+            </form>
+        </div>
+    </div>
+</body>
+{% endblock %}

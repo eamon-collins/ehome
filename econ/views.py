@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 import requests
 from datetime import date, datetime
 from bs4 import BeautifulSoup
@@ -9,6 +9,7 @@ from datetime import datetime
 import requests
 
 from .models import Article, Issue
+from ehome.views import authenticate_user
 
 
 from selenium import webdriver
@@ -32,12 +33,15 @@ req_session = None
 # Create your views here.
 def index(request):
 
+	user = authenticate_user(request)
+	if not user:
+		return HttpResponseRedirect('/login')
 
-	scrape("2022-01-01")
+	#scrape("2022-01-01")
 
 	#get_blank_economist_browser()
 
-	return HttpResponse("Under construction")
+	return HttpResponse("Hello, " + user.username + ", this page is under construction")
 
 
 

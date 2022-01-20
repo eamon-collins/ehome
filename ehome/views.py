@@ -1,95 +1,156 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.forms.models import model_to_dict
-from .forms import LoginForm
+from django.urls import reverse
+from django.contrib.auth import hashers
+
+import hmac
+import os
+from datetime import datetime, timedelta
+from django.utils import timezone
+
+import ehome.settings as settings
+from ehome.forms import LoginForm
+from econ.models import User, Authenticator
+
+
+
 
 # Create your views here.
 def index(request):
+	#FOR DEBUG PURPOSES ONLY
+	if settings.DEBUG:
+		username = "admin"
+		password = "admin"
+		passhash = hashers.make_password(password)
+
+		try:
+			User.objects.get(username = username)
+		except User.DoesNotExist:
+			User(username=username, passhash=passhash).save()
+
+		
+
+	user = authenticate_user(request)
+	if not user:
+		return HttpResponseRedirect('/login')
+
 	return HttpResponse("This page still under construction")
 
 
 def login(request):
-    form = LoginForm()
-    text = " "
-    # If we received a GET request instead of a POST request
-    if request.method == 'GET':
-        # display the login form page
-        next = request.GET.get('next') or reverse('index')
-        return render(request, 'login.html', {'form':form, 'login':True})
+	form = LoginForm()
+	text = " "
+	# If we received a GET request instead of a POST request
+	if request.method == 'GET':
+		# display the login form page
+		next = request.GET.get('next') or reverse('index')
+		return render(request, 'login.html', {'form':form, 'login':True})
 
-    # Creates a new instance of our login_form and gives it our POST data
-    f = LoginForm(request.POST)
-
-
-    # Check if the form instance is invalid
-    if not f.is_valid():
-      # Form was bad -- send them back to login page and show them an error
-        return render(request, 'login.html', {'ok': False, 'error':'Incorrect form input', 'form':form})
-
-    # Sanitize username and password fields
-    username = f.cleaned_data['username']
-    password = f.cleaned_data['password']
-
-    try:
-    	user = User.objects.get(username = username)
-    except User.DoesNotExist:
-    	return JsonResponse('ok': False, 'error': "")
- 
-    if not hashers.check_password(password, user.passhash):
-        return _error_response(request, 'Incorrect password')
-
-    while (True):
-        authenticator = hmac.new(
-            key=settings.SECRET_KEY.encode('utf-8'),
-            msg=os.urandom(32),
-            digestmod='sha256',
-        ).hexdigest()
-        try:
-            Authenticator.objects.get(authenticator=authenticator)
-        except Authenticator.DoesNotExist:
-            break
-
-    try:
-        Authenticator.objects.get(user_id=user).delete()
-        auth = Authenticator.objects.create(user_id=user, authenticator=authenticator)
-    except:
-        auth = Authenticator.objects.create(user_id=user, authenticator=authenticator)
-
-    auth.save()
-    auth = model_to_dict(auth)
+	# Creates a new instance of our login_form and gives it our POST data
+	f = LoginForm(request.POST)
 
 
-    # Ge t next page
-    nextpage = f.cleaned_data.get('next') or reverse('index')
+	# Check if the form instance is invalid
+	if not f.is_valid():
+	  # Form was bad -- send them back to login page
+		return render(request, 'login.html', {'form':form})
 
-    # Send validated information to our experience layer
-    data = {'username':username, 'password':password}
-    resp = requests.post('http://exp-api:8000/v1/api/login/', data)
+	# Sanitize username and password fields
+	username = f.cleaned_data['username']
+	password = f.cleaned_data['password']
 
-    struct = {}
-    try:
-        dataform = str(resp).strip("'<>() ").replace('\'', '\"')
-        struct = json.loads(dataform)
-        text = struct["results"]
-    except:
-        print(repr(resp))
+	try:
+		user = User.objects.get(username = username)
+	except User.DoesNotExist:
+		return HttpResponseRedirect("/login/")
+
+	if not hashers.check_password(password, user.passhash):
+		return HttpResponseRedirect("/login/")
+
+	#Very low chance we independently generate an already used auth,
+	#but might as well make sure
+	while (True):
+		authenticator = hmac.new(
+			key=settings.SECRET_KEY.encode('utf-8'),
+			msg=os.urandom(32),
+			digestmod='sha256',
+		).hexdigest()
+		try:
+			Authenticator.objects.get(authenticator=authenticator)
+		except Authenticator.DoesNotExist:
+			break
+
+	try:
+		Authenticator.objects.get(user_id=user).delete()
+		auth = Authenticator.objects.create(user_id=user, authenticator=authenticator)
+	except:
+		auth = Authenticator.objects.create(user_id=user, authenticator=authenticator)
+
+	auth.save()
+	auth = model_to_dict(auth)
 
 
-    # Check if the experience layer said they gave us incorrect information
-    if not resp or not resp.json()['ok']:
-      # Couldn't log them in, send them back to login page with error
-        return render(request, 'login.html', {'form': form, 'text': text})
+	# Ge t next page
+	next = f.cleaned_data.get('next') or reverse('index')
 
-    """ If we made it here, we can log them in. """
-    # Set their login cookie and redirect to back to wherever they came from
-    resp = resp.json()
-    authenticator = resp['resp']['authenticator']
-    response = HttpResponseRedirect(nextpage)
-    response.set_cookie("auth", authenticator)
 
-    return response
+	""" If we made it here, we can log them in. """
+	# Set their login cookie and redirect to back to wherever they came from
+	authenticator = auth['authenticator']
+	response = HttpResponseRedirect(next)
+	response.set_cookie("auth", authenticator)
+
+	return response
 
 def logout(request):
-    if 'auth' in request.COOKIES:
-        resp = requests.post('http://exp-api:8000/v1/api/logout/', request.COOKIES)
-    return HttpResponseRedirect('/')
+	if 'auth' in request.COOKIES:
+		resp = requests.post('http://exp-api:8000/v1/api/logout/', request.COOKIES)
+	return HttpResponseRedirect('/login/')
+
+def authenticate_user(request):
+
+	try:  # tests if the user has an authenticator that matches the one the database has for them and is not expired
+		auth = Authenticator.objects.get(authenticator=request.COOKIES['auth'])
+		if (auth.date_created > timezone.now() - timedelta(days=1)):
+			return auth.user_id
+	except Authenticator.DoesNotExist:
+		return None
+	except KeyError as e: #they don't have a cookie with auth
+		return None
+
+def createUser(request):
+	if request.method == 'POST':
+		try:
+			username = request.POST.get('username', False)
+			if not username:
+				return JsonResponse({'results': 'You need a username'})
+
+			password = request.POST.get('password', False)
+			if not password:
+				return JsonResponse({'results': 'You need a password'})
+
+			email = request.POST.get('email', False)
+			if not email:
+				return JsonResponse({'results': 'You need an email'})
+
+			try:
+				User.objects.get(username=request.POST.get('username'))
+				return JsonResponse({'results': 'That username is already taken'})
+			except User.DoesNotExist:
+				pass
+
+
+			passhash = hashers.make_password(password)
+
+			User(username=username, passhash=passhash,
+									email=email).save()
+
+			return JsonResponse({'results': 'Success'})
+
+		except IntegrityError:
+			return JsonResponse({'results': 'something went very wrong'})
+		except ValueError:
+			return JsonResponse({'results': 'You got a ValueError'})
+	else:
+		return JsonResponse({'results': "This is a POST method"})

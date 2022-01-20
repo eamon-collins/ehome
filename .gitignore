@@ -2,6 +2,7 @@
 #no recordings, they can have sensitive info
 *.rec
 migrations/
+SECRETS
 
 ###OSX ###
 .DS_Store

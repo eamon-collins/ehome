@@ -56,7 +56,8 @@ ROOT_URLCONF = 'ehome.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR + '/econ/templates/',
+        'DIRS': [BASE_DIR + '/ehome/templates',
+                    BASE_DIR + '/econ/templates/',
         ],
         'APP_DIRS': True,
         'OPTIONS': {
