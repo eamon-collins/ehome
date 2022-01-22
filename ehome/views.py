@@ -33,7 +33,9 @@ def index(request):
 
 	user = authenticate_user(request)
 	if not user:
-		return HttpResponseRedirect('/login')
+		return HttpResponseRedirect('/login/')
+
+
 
 	return HttpResponse("This page still under construction")
 
@@ -63,9 +65,11 @@ def login(request):
 	try:
 		user = User.objects.get(username = username)
 	except User.DoesNotExist:
+		return HttpResponse("no user")
 		return HttpResponseRedirect("/login/")
 
 	if not hashers.check_password(password, user.passhash):
+		return HttpResponse("no pass")
 		return HttpResponseRedirect("/login/")
 
 	#Very low chance we independently generate an already used auth,
@@ -104,8 +108,12 @@ def login(request):
 	return response
 
 def logout(request):
-	if 'auth' in request.COOKIES:
-		resp = requests.post('http://exp-api:8000/v1/api/logout/', request.COOKIES)
+	user = authenticate_user(request)
+	if user:
+		try:
+			Authenticator.objects.get(user_id=user).delete()
+		except Authenticator.DoesNotExist:
+			pass
 	return HttpResponseRedirect('/login/')
 
 def authenticate_user(request):
@@ -119,6 +127,8 @@ def authenticate_user(request):
 	except KeyError as e: #they don't have a cookie with auth
 		return None
 
+#not yet adapted for creating users
+#eventually, should make a form for this and allow it to be accessed when I generate a special link?
 def createUser(request):
 	if request.method == 'POST':
 		try:

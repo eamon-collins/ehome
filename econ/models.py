@@ -2,8 +2,12 @@ from django.db import models
 
 # Create your models here.
 class Issue(models.Model):
-	title =  models.CharField(max_length=40)
+	title =  models.CharField(max_length=60)
 	date = models.DateField()
+	html = models.TextField(blank=True)
+	cover_pic = models.CharField(blank=True, max_length = 150)
+	#internal link to this issues main page
+	link = models.CharField(blank=False, default="", max_length=40)
 
 class Article(models.Model):
 	title = models.CharField(max_length=40)

@@ -10,6 +10,7 @@ import requests
 
 from .models import Article, Issue
 from ehome.views import authenticate_user
+import ehome.settings as settings
 
 
 from selenium import webdriver
@@ -41,9 +42,18 @@ def index(request):
 
 	#get_blank_economist_browser()
 
+
+	#get all Issues in the database
+	issues = Issue.objects.all().order_by("date")
+
+	return render(request, 'issue_list.html', {'user' : user, 'issue_list' : issues})
+
+
 	return HttpResponse("Hello, " + user.username + ", this page is under construction")
 
-
+#renders the main page for the issue with all articles
+def weekly_issue_main(request):
+	articles = Article.objects.all()
 
 def scrape(edition_date):
 	#start a browser session
@@ -57,18 +67,41 @@ def scrape(edition_date):
 
 	weekly_edition = "https://www.economist.com/weeklyedition/"+edition_date#datetime.date("2022-01-01").isoformat()
 	browser.get(weekly_edition)
+	local_issue_link = "/"+edition_date+"/"
 
 	try:
 		title = browser.find_element_by_class_name("weekly-edition-header__headline").text
 	except Exception as e:
 		title = "Couldn't find issue title"
 
+	try:
+		html = sanitize_html(browser.page_source)
+	except Exception as e:
+		html = "Couldn't find html"
+
+
+	#get cover pic
+	cover_pic = browser.find_element_by_class_name("weekly-edition-header__image").find_element_by_tag_name("img")
+	orig_link = cover_pic.get_attribute("src")
+
+	#if this is the first image of an edition, we need to create a folder for it
+	if not os.path.isdir(STATIC_IMG_URL + datetime.fromisoformat(edition_date).strftime("%Y-%m-%d")):
+		os.mkdir(STATIC_IMG_URL + datetime.fromisoformat(edition_date).strftime("%Y-%m-%d"))
+
+	s = get_logged_in_requests_session(browser)
+	imgdata = s.get(orig_link, allow_redirects=True)
+	cover_pic = transform_link(orig_link, edition_date)
+	open(cover_pic, 'wb').write(imgdata.content)
+
 	#check for pre-existing issue matching this date in our database
 	dupes = Issue.objects.filter(date = edition_date)
 	if dupes.count() == 0:
 		issue = Issue.objects.create(
 			title = title,
-			date = edition_date
+			date = edition_date,
+			cover_pic =  cover_pic,
+			link = local_issue_link,
+			html = html
 			)
 		print(title + repr(edition_date))
 		issue.save()
@@ -171,25 +204,25 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	except NoSuchElementException as e:
 		textbased = False 
 
-	#harvest all pictures
-	global current_issue
-	#if this is the first image of an edition, we need to create a folder for it
-	if not os.path.isdir(STATIC_IMG_URL + current_issue.date.strftime("%d-%m-%Y")):
-		os.mkdir(STATIC_IMG_URL + current_issue.date.strftime("%d-%m-%Y"))
+	# #harvest all pictures
+	# global current_issue
+	# #if this is the first image of an edition, we need to create a folder for it
+	# if not os.path.isdir(STATIC_IMG_URL + current_issue.date.strftime("%Y-%m-%d")):
+	# 	os.mkdir(STATIC_IMG_URL + current_issue.date.strftime("%Y-%m-%d"))
 
 	try:
 		images = browser.find_elements_by_tag_name("img")
 		link_map = dict()
 		for img in images:
 			orig_link = img.get_attribute("src")
-			my_link = transform_link(orig_link)
+			my_link = transform_link(orig_link, issue.date.strftime("%Y-%m-%d"))
 			if my_link:
 				link_map[orig_link] = my_link
 
 		#now actually visit and screenshot each image
 		#Economist forbids most other automated gets
 		#actually, trying to set up logged requests session
-		s = get_logged_requests_session(browser)
+		s = get_logged_in_requests_session(browser)
 		for link, dest in link_map.items():
 			#see if we've already stored this image
 			if os.path.isfile(dest):
@@ -226,7 +259,8 @@ def login(browser):
 	#rec_path = "econ/recordings/loginfast.rec"
 	Playback.playback(os.path.abspath(rec_path), 1)
 
-def get_logged_requests_session(browser):
+#returns a requests session with my auth cookies set
+def get_logged_in_requests_session(browser):
 	global req_session 
 
 	if not req_session:
@@ -248,7 +282,12 @@ def get_logged_requests_session(browser):
 
 #turns the economist image link into something we can use to store 
 #only for images atm
-def transform_link(orig_link):
+#if static = false or unsupplied
+#LOCAL LINK GIVE ACTUAL FOLDER PATH TO STORE AT
+#if static = True
+#STATIC LINK GIVES FROM STATIC URL, NOT FOLDER
+def transform_link(orig_link, current_issue_date= None, static=False):
+	my_link = None
 	try:
 		my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
 	except ValueError as e:
@@ -258,12 +297,40 @@ def transform_link(orig_link):
 	if diff > 0:
 		my_link = my_link[diff:]
 
-	global current_issue
+	if static:
+		prefix = "img"
+	else:
+		prefix = STATIC_IMG_URL
 
-	my_link = os.path.join(STATIC_IMG_URL, current_issue.date.strftime("%d-%m-%Y"), my_link)
-			
+	if not current_issue_date:
+		global current_issue
+		my_link = os.path.join(prefix, current_issue.date.strftime("%Y-%m-%d"), my_link)
+	else:
+		my_link = os.path.join(prefix, current_issue_date, my_link)
+
 	return my_link
 
+#turns the economist image link into something we can use to store 
+#only for images atm
+
+def static_link(orig_link, current_issue_date= None):
+	my_link = None
+	try:
+		my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
+	except ValueError as e:
+		return None
+
+	diff = len(my_link) - 150 
+	if diff > 0:
+		my_link = my_link[diff:]
+
+	if not current_issue_date:
+		global current_issue
+		my_link = os.path.join( "img", current_issue.date.strftime("%Y-%m-%d"), my_link)
+	else:
+		my_link = os.path.join( "img", current_issue_date, my_link)
+
+	return my_link
 
 def sanitize_html(html):
 	soup = BeautifulSoup(html, "lxml")
@@ -280,7 +347,7 @@ def sanitize_html(html):
 	for img in soup.select('img'):
 		orig_link = img['src']
 
-		my_link = transform_link(orig_link)
+		my_link = transform_link(orig_link, static=True)
 		if my_link:
 			img['src'] = my_link
 		else:
