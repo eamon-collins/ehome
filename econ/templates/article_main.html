@@ -1,0 +1,17 @@
+{% load static %}
+<head>
+	<link rel="stylesheet" href="{% static 'econ_style.css' %}">
+	<link rel="stylesheet" href="{% static 'all-editions.css' %}">
+<!-- 	<link rel="stylesheet" href="{% static 'form-field.css' %}">
+	<link rel="stylesheet" href="{% static 'reset.css' %}">
+	<link rel="stylesheet" href="{% static 'rule.css' %}"> -->
+	<link rel="stylesheet" href="{% static 'color.css' %}">
+	<meta charset="UTF-8">
+	<title>article.title</title>
+</head>
+
+{% block body_block %}
+<body>
+	{{ article.html | safe }}
+</body>
+{% endblock %}

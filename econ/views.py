@@ -38,7 +38,7 @@ def index(request):
 	if not user:
 		return HttpResponseRedirect('/login')
 
-	#scrape("2022-01-01")
+	scrape("2022-01-01")
 
 	#get_blank_economist_browser()
 
@@ -52,8 +52,40 @@ def index(request):
 	return HttpResponse("Hello, " + user.username + ", this page is under construction")
 
 #renders the main page for the issue with all articles
-def weekly_issue_main(request):
-	articles = Article.objects.all()
+def weekly_issue_main(request, date):
+	try:
+		issue = Issue.objects.get(date=date)
+	except Issue.DoesNotExist:
+		return HttpResponseRedirect("/econ/")
+
+	try:
+		articles = Article.objects.filter(issue = issue)
+	except Article.DoesNotExist:
+		articles = []
+
+	print(articles)
+	print(issue)
+
+	return render(request, 'issue_main.html', {'issue' : issue, 
+												'articles' : articles})
+
+def serve_article(request, issue_date, linky_title):
+	try:
+		article = Article.objects.get(linky_title = linky_title )
+	except Article.DoesNotExist:
+		return HttpResponse("Article does not exist in our database, check your link")
+
+	try:
+		issue = Issue.objects.get(date = issue_date)
+	except Issue.DoesNotExist:
+		return HttpResponse("can't find issue associated with article")
+
+	return render(request, 'article_main.html', {'issue': issue,
+												'article' : article})
+
+
+	return HttpResponse("article view under construction")
+
 
 def scrape(edition_date):
 	#start a browser session
@@ -67,17 +99,14 @@ def scrape(edition_date):
 
 	weekly_edition = "https://www.economist.com/weeklyedition/"+edition_date#datetime.date("2022-01-01").isoformat()
 	browser.get(weekly_edition)
-	local_issue_link = "/"+edition_date+"/"
+	local_issue_link = "/econ/"+edition_date+"/"
 
 	try:
 		title = browser.find_element_by_class_name("weekly-edition-header__headline").text
 	except Exception as e:
 		title = "Couldn't find issue title"
 
-	try:
-		html = sanitize_html(browser.page_source)
-	except Exception as e:
-		html = "Couldn't find html"
+
 
 
 	#get cover pic
@@ -91,6 +120,7 @@ def scrape(edition_date):
 	s = get_logged_in_requests_session(browser)
 	imgdata = s.get(orig_link, allow_redirects=True)
 	cover_pic = transform_link(orig_link, edition_date)
+	cover_pic_static = transform_link(orig_link, edition_date, static=True)
 	open(cover_pic, 'wb').write(imgdata.content)
 
 	#check for pre-existing issue matching this date in our database
@@ -99,12 +129,12 @@ def scrape(edition_date):
 		issue = Issue.objects.create(
 			title = title,
 			date = edition_date,
-			cover_pic =  cover_pic,
-			link = local_issue_link,
-			html = html
+			cover_pic =  cover_pic_static,
+			link = local_issue_link
 			)
 		print(title + repr(edition_date))
 		issue.save()
+		issue = Issue.objects.get(date = edition_date)
 	else: 
 		issue = dupes.get()
 		print("We already have a record of an issue for this date")
@@ -113,6 +143,7 @@ def scrape(edition_date):
 	#set a global current issue when we scrape so everyone knows what it is
 	global current_issue
 	current_issue = issue
+
 
 	#Now compose a list of article links in the latest weekly issue
 	#get articles by following links and scrape them
@@ -123,10 +154,20 @@ def scrape(edition_date):
 	article_links = []
 	for headline in headline_elements:
 		article_links.append(headline.get_attribute("href"))
+
+	#now sanitize and store html after we are done using it, but before we change the browser page
+	try:
+		html = sanitize_html(browser.page_source, issue_date = issue.date, get_inside_main=True)
+		issue.html = html 
+		issue.save()
+	except Exception as e:
+		print(e)
+		html = "Couldn't find html"
+
 	article_objects = []
 	for count, link in enumerate(article_links):
-		# if count > 1: #so debugging is quicker
-		# 	return
+		if count > 2: #so debugging is quicker
+			return
 		#headline_elements = browser.find_elements_by_class_name("headline-link")
 		article = scrape_article(browser, issue, link)#, headline_elements[count])
 
@@ -182,6 +223,7 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	except NoSuchElementException as e:
 		textbased = False
 	article.url = article_url
+	article.linky_title = transform_href_link(article_url, issue.date).rpartition('/')[2]
 	
 
 	print(article.html)
@@ -240,8 +282,9 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 
 
 	#This sanitize method alters the html, do it after we extract original info
-	article.html = sanitize_html(browser.page_source)
-
+	article.html = sanitize_html(browser.page_source, issue_date=issue.date, get_inside_main=True)
+	#this in when convenient
+	article.save()
 	return article
 
 
@@ -308,31 +351,52 @@ def transform_link(orig_link, current_issue_date= None, static=False):
 	else:
 		my_link = os.path.join(prefix, current_issue_date, my_link)
 
+	# if static:
+	# 	my_link = "{% static " + my_link + " %}"
+
 	return my_link
 
-#turns the economist image link into something we can use to store 
-#only for images atm
+#for transforming their links to articles to our links for articles
+def transform_href_link(orig_link, current_issue_date=None):
+	#get last bit of article title
+	link_arr = orig_link.split('/')
+	linky_title = link_arr[-1]
 
-def static_link(orig_link, current_issue_date= None):
-	my_link = None
-	try:
-		my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
-	except ValueError as e:
-		return None
 
-	diff = len(my_link) - 150 
-	if diff > 0:
-		my_link = my_link[diff:]
+	if len(link_arr) < 4:
+		return "econ/"
 
-	if not current_issue_date:
-		global current_issue
-		my_link = os.path.join( "img", current_issue.date.strftime("%Y-%m-%d"), my_link)
+	yearind = -1
+	for ind, el in enumerate(link_arr):
+		if el in ['2018', '2019', '2020', '2021', '2022']:
+			yearind = ind
+	if yearind != -1:
+		date_str = os.path.join(link_arr[yearind], link_arr[yearind+1], link_arr[yearind+2])
 	else:
-		my_link = os.path.join( "img", current_issue_date, my_link)
+		return "econ/"
+
+	my_link = os.path.join("econ",date_str,linky_title)
+
+	print("LINKED:" + linky_title)
 
 	return my_link
 
-def sanitize_html(html):
+
+	# if current_issue_date:
+	# 	linky_title = os.path.join("econ",current_issue_date.isoformat(), linky_title)
+	# else: #assuming it is 3 slashes back
+	# 	date_arr = orig_link.split('/')[-4:]
+	# 	if len(date_arr) < 3:
+	# 		return orig_link
+	# 	date_str = ""
+	# 	for i in range(3):
+	# 		date_str += str(date_arr[i]) + "/"
+	# 	linky_title = date_str + linky_title
+
+	# return linky_title
+
+
+def sanitize_html(html, issue_date =None, get_inside_main=False):
 	soup = BeautifulSoup(html, "lxml")
 
 	#remove all script tags
@@ -343,17 +407,31 @@ def sanitize_html(html):
 	for ad in soup.find_all("div", {"class": "advert"}):
 		ad.extract()
 
+	for m in soup.select('meta'):
+		m.extract()
+
 	#change image link so it works with our static path
 	for img in soup.select('img'):
 		orig_link = img['src']
 
 		my_link = transform_link(orig_link, static=True)
 		if my_link:
-			img['src'] = my_link
+			img['src'] = settings.STATIC_URL + my_link
+			del img['srcset']
+			del img['sizes']
 		else:
 			img.extract()
 
-		
+	for a in soup.select('a'):
+		try:
+			a['href'] = "/" + transform_href_link(a['href'], issue_date)
+		except KeyError as e: #doesn't have a href link, we don't care for now, may want to remove tho
+			pass
+
+	if get_inside_main:
+		main_block = soup.find_all(id='content')[0]
+		return main_block.decode_contents()
+
 
 	return str(soup)
 

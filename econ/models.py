@@ -12,7 +12,10 @@ class Issue(models.Model):
 class Article(models.Model):
 	title = models.CharField(max_length=40)
 	sub_title = models.CharField(max_length = 40, blank=True)
+	#url is external, don't expose it to user. link is internal,
+	linky_title = models.CharField(max_length=60, default="/sorry/")
 	url = models.URLField(max_length=500, blank=False, default="")
+	link = models.CharField(blank=False, default="", max_length=80)
 	issue = models.ForeignKey('Issue', models.CASCADE)
 	category = models.CharField(max_length=20, blank=True)
 	description = models.CharField(max_length=200, blank=True)
