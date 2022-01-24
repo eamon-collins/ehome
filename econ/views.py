@@ -39,7 +39,10 @@ def index(request):
 	if not user:
 		return HttpResponseRedirect('/login')
 
-	scrape("2022-01-01")
+	#scrape("2022-01-01")
+	#scrape("2022-01-08")
+	scrape("2022-01-15")
+	scrape("2022-01-22")
 
 	#get_blank_economist_browser()
 
@@ -215,10 +218,14 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	#start building the article object
 	article = Article()
 	textbased = True
+	article.issue = issue
 
 	article.title = browser.find_element_by_class_name("article__headline").text
-	article.sub_title = browser.find_element_by_class_name("article__subheadline").text
-	article.issue = issue
+	try:
+		article.sub_title = browser.find_element_by_class_name("article__subheadline").text
+	except NoSuchElementException as e:
+		article.sub_title = ""
+
 	try:
 		article.description = browser.find_element_by_class_name("article__description").text 
 	except NoSuchElementException as e:
