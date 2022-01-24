@@ -33,7 +33,7 @@ def index(request):
 
 	#Create origin users
 	with open('SECRETS.json') as f:
-		secrets = json.loads
+		secrets = json.loads(f.read())
 	for userdict in secrets["ORIGIN_ACCOUNTS"]:
 		try:
 			User.objects.get(username = userdict["username"])
