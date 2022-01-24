@@ -7,6 +7,7 @@ from random import randint
 import time
 from datetime import datetime
 import requests
+import json
 
 from .models import Article, Issue
 from ehome.views import authenticate_user
@@ -166,8 +167,8 @@ def scrape(edition_date):
 
 	article_objects = []
 	for count, link in enumerate(article_links):
-		if count > 2: #so debugging is quicker
-			return
+		# if count > 2: #so debugging is quicker
+		# 	return
 		#headline_elements = browser.find_elements_by_class_name("headline-link")
 		article = scrape_article(browser, issue, link)#, headline_elements[count])
 
@@ -176,7 +177,7 @@ def scrape(edition_date):
 			
 		
 	#dont really need this and simpler without, never going to need speed
-	Article.objects.bulk_create(article_objects)
+	#Article.objects.bulk_create(article_objects)
 
 
 def scrape_article(browser, issue, article_url, art_elem=None):
@@ -363,7 +364,7 @@ def transform_href_link(orig_link, current_issue_date=None):
 	linky_title = link_arr[-1]
 
 
-	if len(link_arr) < 4:
+	if len(link_arr) < 3 :
 		return "econ/"
 
 	yearind = -1
@@ -371,9 +372,12 @@ def transform_href_link(orig_link, current_issue_date=None):
 		if el in ['2018', '2019', '2020', '2021', '2022']:
 			yearind = ind
 	if yearind != -1:
-		date_str = os.path.join(link_arr[yearind], link_arr[yearind+1], link_arr[yearind+2])
+		date_str = link_arr[yearind]+"-"+ link_arr[yearind+1]+"-"+ link_arr[yearind+2]
 	else:
-		return "econ/"
+		if current_issue_date:
+			date_str = current_issue_date.isoformat()
+		else:
+			return "econ/"
 
 	my_link = os.path.join("econ",date_str,linky_title)
 
@@ -406,6 +410,14 @@ def sanitize_html(html, issue_date =None, get_inside_main=False):
 	#try to remove interruptive ads
 	for ad in soup.find_all("div", {"class": "advert"}):
 		ad.extract()
+	#internal ads
+	for ad in soup.find_all("div", {"class": "layout-article-promo"}):
+		ad.extract()
+
+	#remove links to share article
+	for share in soup.find_all("div", {"class": "layout-article-sharing"}):
+		share.extract()
+
 
 	for m in soup.select('meta'):
 		m.extract()

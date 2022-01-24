@@ -3,6 +3,7 @@
 *.rec
 migrations/
 SECRETS
+SECRETS.json
 
 ###OSX ###
 .DS_Store

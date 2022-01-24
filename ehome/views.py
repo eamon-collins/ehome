@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.contrib.auth import hashers
 
 import hmac
+import json
 import os
 from datetime import datetime, timedelta
 from django.utils import timezone
@@ -12,6 +13,7 @@ from django.utils import timezone
 import ehome.settings as settings
 from ehome.forms import LoginForm
 from econ.models import User, Authenticator
+
 
 
 
@@ -29,7 +31,15 @@ def index(request):
 		except User.DoesNotExist:
 			User(username=username, passhash=passhash).save()
 
-		
+	#Create origin users
+	with open('SECRETS.json') as f:
+		secrets = json.loads
+	for userdict in secrets["ORIGIN_ACCOUNTS"]:
+		try:
+			User.objects.get(username = userdict["username"])
+		except User.DoesNotExist:
+			passhash = hashers.make_password(userdict["password"])
+			User(username = userdict["username"], passhash = passhash)
 
 	user = authenticate_user(request)
 	if not user:
