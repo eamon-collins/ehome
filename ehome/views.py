@@ -30,16 +30,23 @@ def index(request):
 			User.objects.get(username = username)
 		except User.DoesNotExist:
 			User(username=username, passhash=passhash).save()
-
-	#Create origin users
-	with open('SECRETS.json') as f:
-		secrets = json.loads(f.read())
-	for userdict in secrets["ORIGIN_ACCOUNTS"]:
+	else:
+		#Create origin users
+		with open('SECRETS.json') as f:
+			secrets = json.loads(f.read())
+		for userdict in secrets["ORIGIN_ACCOUNTS"]:
+			try:
+				User.objects.get(username = userdict["username"])
+			except User.DoesNotExist:
+				passhash = hashers.make_password(userdict["password"])
+				User(username = userdict["username"], passhash = passhash)
+		#destry admin user if it exists in this database, we dont want it in prod
 		try:
-			User.objects.get(username = userdict["username"])
+			admin = User.objects.get(username = "admin")
+			admin.delete()
 		except User.DoesNotExist:
-			passhash = hashers.make_password(userdict["password"])
-			User(username = userdict["username"], passhash = passhash)
+			pass
+
 
 	user = authenticate_user(request)
 	if not user:
