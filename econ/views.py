@@ -20,7 +20,7 @@ from selenium.common.exceptions import StaleElementReferenceException, NoSuchEle
 #relative import to private tool
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'alibabble'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'alibabble'))
 import playback as Playback
 
 #whether the system will overwrite the old record of the article
