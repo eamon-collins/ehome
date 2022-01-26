@@ -4,6 +4,7 @@
 migrations/
 SECRETS
 SECRETS.json
+alibabble/*
 
 ###OSX ###
 .DS_Store
