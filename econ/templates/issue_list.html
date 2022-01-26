@@ -1,29 +1,18 @@
-
-{% load static %}
-
-<head>
-	<link rel="stylesheet" href="{% static 'econ_style.css' %}">
-	<link rel="stylesheet" href="{% static 'all-editions.css' %}">
-<!-- 	<link rel="stylesheet" href="{% static 'form-field.css' %}">
-	<link rel="stylesheet" href="{% static 'reset.css' %}">
-	<link rel="stylesheet" href="{% static 'rule.css' %}"> -->
-	<link rel="stylesheet" href="{% static 'color.css' %}">
-	<meta charset="UTF-8">
-	<title>Issues</title>
-</head>
-
+{% extends "econ_header.html" %}
 {% block body_block %}
+{% load static %}	
+
 <body>
-	
+	<div>
+		<main role="main" id="content">
+			<h1 class="visually-hidden">All editions</h1>
+			<form action="/econ/?year=2022" class="layout-edition-collection-filters"><div class="edition-filter"><div class="ds-form-field-layout ds-form-field-layout--adjacent"><label class="ds-form-label" for="year-filter"><span>Year</span></label><select id="year-filter" class="ds-form-input ds-form-field-select" name="year"><option selected="" aria-selected="true" value="2022">2022</option><option aria-selected="false" value="2021">2021</option><option aria-selected="false" value="2020">2020</option><option aria-selected="false" value="2019">2019</option><option aria-selected="false" value="2018">2018</option><option aria-selected="false" value="2017">2017</option><option aria-selected="false" value="2016">2016</option><option aria-selected="false" value="2015">2015</option><option aria-selected="false" value="2014">2014</option><option aria-selected="false" value="2013">2013</option><option aria-selected="false" value="2012">2012</option><option aria-selected="false" value="2011">2011</option><option aria-selected="false" value="2010">2010</option><option aria-selected="false" value="2009">2009</option><option aria-selected="false" value="2008">2008</option><option aria-selected="false" value="2007">2007</option><option aria-selected="false" value="2006">2006</option><option aria-selected="false" value="2005">2005</option><option aria-selected="false" value="2004">2004</option><option aria-selected="false" value="2003">2003</option><option aria-selected="false" value="2002">2002</option><option aria-selected="false" value="2001">2001</option><option aria-selected="false" value="2000">2000</option><option aria-selected="false" value="1999">1999</option><option aria-selected="false" value="1998">1998</option><option aria-selected="false" value="1997">1997</option></select></div></div></form>
 
-
-
-<div><main role="main" id="content">
-	<h1 class="visually-hidden">All editions</h1><div class="layout-edition-collection-tabs"><ul role="tablist" class="ds-tab-list"><li role="presentation" class="ds-tab-item"><a role="tab" title="Current edition" aria-selected="false" class="ds-tab-item__link ds-tab-item__link--minor" href="/weeklyedition">Current edition</a></li><li role="presentation" class="ds-tab-item"><a role="tab" title="Browse all editions" aria-selected="true" class="ds-tab-item__link ds-tab-item__link--minor ds-tab-item__link--selected" href="/econ/?year=2022">Browse all editions</a></li></ul></div><form action="/econ/?year=2022" class="layout-edition-collection-filters"><div class="edition-filter"><div class="ds-form-field-layout ds-form-field-layout--adjacent"><label class="ds-form-label" for="year-filter"><span>Year</span></label><select id="year-filter" class="ds-form-input ds-form-field-select" name="year"><option selected="" aria-selected="true" value="2022">2022</option><option aria-selected="false" value="2021">2021</option><option aria-selected="false" value="2020">2020</option><option aria-selected="false" value="2019">2019</option><option aria-selected="false" value="2018">2018</option><option aria-selected="false" value="2017">2017</option><option aria-selected="false" value="2016">2016</option><option aria-selected="false" value="2015">2015</option><option aria-selected="false" value="2014">2014</option><option aria-selected="false" value="2013">2013</option><option aria-selected="false" value="2012">2012</option><option aria-selected="false" value="2011">2011</option><option aria-selected="false" value="2010">2010</option><option aria-selected="false" value="2009">2009</option><option aria-selected="false" value="2008">2008</option><option aria-selected="false" value="2007">2007</option><option aria-selected="false" value="2006">2006</option><option aria-selected="false" value="2005">2005</option><option aria-selected="false" value="2004">2004</option><option aria-selected="false" value="2003">2003</option><option aria-selected="false" value="2002">2002</option><option aria-selected="false" value="2001">2001</option><option aria-selected="false" value="2000">2000</option><option aria-selected="false" value="1999">1999</option><option aria-selected="false" value="1998">1998</option><option aria-selected="false" value="1997">1997</option></select></div></div></form>
-
-	{% for issue in issue_list %}
 
 	<div class="layout-edition-collection ds-layout-grid ds-layout-grid--edged">
+	{% for issue in issue_list %}
+
+
 		<div class="edition-teaser">
 			<div itemscope="" itemprop="image" itemtype="https://schema.org/ImageObject" class="edition-teaser__image">
 				<img src="{% static issue.cover_pic %}" alt="" width="1280" height="1684">
@@ -33,8 +22,9 @@
 				<h2><a class="headline-link" href="{{ issue.link }}"><span class="edition-teaser__headline">{{ issue.title }}</span></a></h2>
 			</div>
 		</div>
-	</div>
+	
 	{% endfor %}
+	</div>
 </body>
 
-	{% endblock %}
+{% endblock %}

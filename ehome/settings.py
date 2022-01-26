@@ -29,7 +29,7 @@ with open('SECRETS.json') as s:
 DEBUG = False
 
 ALLOWED_HOSTS = secrets["ALLOWED_HOSTS"]
-#ALLOWED_HOSTS = [ ]
+
 
 LOGIN_REDIRECT_URL = 'index'
 

@@ -52,7 +52,7 @@ def index(request):
 
 
 
-	return HttpResponse("This page still under construction")
+	return HttpResponseRedirect("econ/")
 
 
 def login(request):

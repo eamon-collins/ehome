@@ -21,4 +21,5 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('<yyyy:date>/', views.weekly_issue_main, name="weekly_issue_main"),
     path('<yyyy:issue_date>/<slug:linky_title>/', views.serve_article, name="serve_article"),
+    path('weeklyedition/', views.weekly_edition, name="weekly_edition"),
 ]

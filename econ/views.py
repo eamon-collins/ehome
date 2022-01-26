@@ -9,7 +9,7 @@ from ehome.views import authenticate_user
 import ehome.settings as settings
 
 
-
+from bs4 import BeautifulSoup
 
 #serves list of issues in database
 def index(request):
@@ -27,7 +27,7 @@ def index(request):
 
 
 	#get all Issues in the database
-	issues = Issue.objects.all().order_by("date")
+	issues = Issue.objects.all().order_by("-date")
 
 	return render(request, 'issue_list.html', {'user' : user, 'issue_list' : issues})
 
@@ -36,6 +36,11 @@ def index(request):
 
 #renders the main page for the issue with all articles
 def weekly_issue_main(request, date):
+
+	user = authenticate_user(request)
+	if not user:
+		return HttpResponseRedirect('/login')
+
 	try:
 		issue = Issue.objects.get(date=date)
 	except Issue.DoesNotExist:
@@ -46,13 +51,14 @@ def weekly_issue_main(request, date):
 	except Article.DoesNotExist:
 		articles = []
 
-	print(articles)
-	print(issue)
-
 	return render(request, 'issue_main.html', {'issue' : issue, 
 												'articles' : articles})
 
 def serve_article(request, issue_date, linky_title):
+	user = authenticate_user(request)
+	if not user:
+		return HttpResponseRedirect('/login')
+	
 	try:
 		article = Article.objects.get(linky_title = linky_title )
 	except Article.DoesNotExist:
@@ -69,4 +75,9 @@ def serve_article(request, issue_date, linky_title):
 
 	return HttpResponse("article view under construction")
 
+
+#should redirect to the most recent edition
+#hardcoded atm, change later
+def weekly_edition(request):
+	return HttpResponseRedirect("/econ/2022-01-22/")
 
