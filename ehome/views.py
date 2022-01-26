@@ -15,10 +15,8 @@ from ehome.forms import LoginForm
 from econ.models import User, Authenticator
 
 
-
-
-
-# Create your views here.
+# At the moment, if not debug should create users according to 
+# origin users in SECRETS.json
 def index(request):
 	#FOR DEBUG PURPOSES ONLY
 	if settings.DEBUG:
@@ -39,7 +37,7 @@ def index(request):
 				User.objects.get(username = userdict["username"])
 			except User.DoesNotExist:
 				passhash = hashers.make_password(userdict["password"])
-				User(username = userdict["username"], passhash = passhash)
+				User(username = userdict["username"], passhash = passhash).save()
 		#destry admin user if it exists in this database, we dont want it in prod
 		try:
 			admin = User.objects.get(username = "admin")

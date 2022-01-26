@@ -11,8 +11,6 @@ import ehome.settings as settings
 
 
 
-
-
 #serves list of issues in database
 def index(request):
 
