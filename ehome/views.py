@@ -107,7 +107,6 @@ def login(request):
 		auth = Authenticator.objects.create(user_id=user, authenticator=authenticator)
 
 	auth.save()
-	auth = model_to_dict(auth)
 
 
 	# Ge t next page
@@ -116,26 +115,23 @@ def login(request):
 
 	""" If we made it here, we can log them in. """
 	# Set their login cookie and redirect to back to wherever they came from
-	authenticator = auth['authenticator']
 	response = HttpResponseRedirect(next)
 	response.set_cookie("auth", authenticator)
 
 	return response
 
 def logout(request):
-	user = authenticate_user(request)
-	if user:
-		try:
-			Authenticator.objects.get(user_id=user).delete()
-		except Authenticator.DoesNotExist:
-			pass
+	try:
+		Authenticator.objects.get(authenticator=request.COOKIES['auth']).delete()
+	except Authenticator.DoesNotExist:
+		pass
 	return HttpResponseRedirect('/login/')
 
 def authenticate_user(request):
-
 	try:  # tests if the user has an authenticator that matches the one the database has for them and is not expired
 		auth = Authenticator.objects.get(authenticator=request.COOKIES['auth'])
 		if (auth.date_created > timezone.now() - timedelta(days=1)):
+			print(auth.user_id.username)
 			return auth.user_id
 	except Authenticator.DoesNotExist:
 		return None

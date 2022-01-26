@@ -25,7 +25,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.index, name='index'),
     path('login/', views.login, name='login'),
-    path('logout/', views.login, name='logout'),
+    path('logout/', views.logout, name='logout'),
     path('econ/', include('econ.urls')),
 
 ] + static(settings.STATIC_URL)

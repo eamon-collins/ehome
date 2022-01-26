@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 
 #serves list of issues in database
 def index(request):
-
 	user = authenticate_user(request)
 	if not user:
 		return HttpResponseRedirect('/login')
@@ -36,7 +35,6 @@ def index(request):
 
 #renders the main page for the issue with all articles
 def weekly_issue_main(request, date):
-
 	user = authenticate_user(request)
 	if not user:
 		return HttpResponseRedirect('/login')
@@ -79,5 +77,9 @@ def serve_article(request, issue_date, linky_title):
 #should redirect to the most recent edition
 #hardcoded atm, change later
 def weekly_edition(request):
+	user = authenticate_user(request)
+	if not user:
+		return HttpResponseRedirect('/login')
+
 	return HttpResponseRedirect("/econ/2022-01-22/")
 
