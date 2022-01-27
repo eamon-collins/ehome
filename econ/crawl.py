@@ -13,6 +13,14 @@ import ehome.settings as settings
 from selenium import webdriver
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
 
+#schedule edition scraping, called in econ.apps 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from django_apscheduler.jobstores import DjangoJobStore, register_events
+from django.utils import timezone
+from django_apscheduler.models import DjangoJobExecution
+import sys
+
 #relative import to private tool
 import sys
 import os
@@ -29,10 +37,14 @@ current_issue = None
 req_session = None
 
 
+#takes an edition date string
+#scheduler for this is in econ.urls so that it starts in the background
+#every time the server starts
 def scrape(edition_date):
 	#start a browser session
 	chrome_options = webdriver.ChromeOptions()
 	chrome_options.add_argument("--disable-infobars")
+	chrome_options.add_argument("--headless")
 	chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0")
 	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
 
@@ -399,7 +411,43 @@ def get_blank_economist_browser():
 	#start a browser session
 	chrome_options = webdriver.ChromeOptions()
 	chrome_options.add_argument("--disable-infobars")
+	chrome_options.add_argument("--headless")
 	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
 
 	browser.get('https://economist.com')
 
+def scrape_this_week():
+	#check if there is likely a new edition
+	now = datetime.today()
+	if now.weekday() == 4:
+		oneday = timedelta(day=1)
+		datestr = (now + oneday).strftime('%Y-%m-%d')
+		scrape(datestr)
+
+
+def delete_old_job_executions(max_age=604_800):
+	"""This job deletes all apscheduler job executions older than `max_age` from the database."""
+	DjangoJobExecution.objects.delete_old_job_executions(max_age)
+
+def setup_timed_scraping():
+	scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)
+	scheduler.add_jobstore(DjangoJobStore(), "default")
+
+	scheduler.add_job(
+	  scrape_this_week,
+	  trigger=CronTrigger(day_of_week="fri", hour="06", minute="00"), 
+	  id="scrape_this_week", 
+	  max_instances=1,
+	  replace_existing=True,
+	)
+
+
+	scheduler.add_job(
+	  delete_old_job_executions,
+	  trigger=CronTrigger(
+		day_of_week="fri", hour="05", minute="00"
+	  ),  
+	  id="delete_old_job_executions",
+	  max_instances=1,
+	  replace_existing=True,
+	)
