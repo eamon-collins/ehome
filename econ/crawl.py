@@ -11,7 +11,18 @@ from ehome.views import authenticate_user
 import ehome.settings as settings
 
 from selenium import webdriver
-from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException, NoSuchFrameException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+#schedule edition scraping, called in econ.apps 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from django_apscheduler.jobstores import DjangoJobStore, register_events
+from django.utils import timezone
+from django_apscheduler.models import DjangoJobExecution
+import sys
 
 #relative import to private tool
 import sys
@@ -22,17 +33,21 @@ import playback as Playback
 
 #whether the system will overwrite the old record of the article
 #or stop and leave the current record. Doesnt really work as true rn
-OVERWRITE = False
+OVERWRITE = True
 
 STATIC_IMG_URL = "econ/static/img/"
 current_issue = None
 req_session = None
 
 
+#takes an edition date string
+#scheduler for this is in econ.urls so that it starts in the background
+#every time the server starts
 def scrape(edition_date):
 	#start a browser session
 	chrome_options = webdriver.ChromeOptions()
 	chrome_options.add_argument("--disable-infobars")
+	#chrome_options.add_argument("--headless")
 	chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0")
 	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
 
@@ -77,7 +92,20 @@ def scrape(edition_date):
 		print(title + repr(edition_date))
 		issue.save()
 		issue = Issue.objects.get(date = edition_date)
-	else: 
+	elif OVERWRITE: 
+		issue = dupes.get()
+		issue.delete()
+
+		issue = Issue.objects.create(
+			title = title,
+			date = edition_date,
+			cover_pic =  cover_pic_static,
+			link = local_issue_link
+			)
+		print(title + repr(edition_date))
+		issue.save()
+		issue = Issue.objects.get(date = edition_date)
+	else:
 		issue = dupes.get()
 		print("We already have a record of an issue for this date")
 
@@ -91,11 +119,13 @@ def scrape(edition_date):
 	#get articles by following links and scrape them
 	#then save them to db.
 	headline_elements = browser.find_elements_by_class_name("headline-link")
-
+	headline_elements += browser.find_elements_by_class_name("teaser-weekly-edition--leaders")
+	headline_elements += browser.find_elements_by_class_name("teaser-weekly-edition--cols")
 	#necessary to get links first so don't get StaleElements
 	article_links = []
 	for headline in headline_elements:
-		article_links.append(headline.get_attribute("href"))
+		headline_link = headline.find_element_by_tag_name("a")
+		article_links.append(headline_link.get_attribute("href"))
 
 	#now sanitize and store html after we are done using it, but before we change the browser page
 	try:
@@ -137,7 +167,8 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 		return None
 	elif dupes.count(): #doesnt really overwrite
 		print("This article url exists, re-scraping and overwriting")
-		return dupes.get()
+		dupes.delete()
+		#return dupes.get()
 
 
 	#test if it's logged me out, get back in by simply clicking login
@@ -146,7 +177,7 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 		#loginlink = browser.find_element_by_id('regwall-login-link')
 		if regwall:
 			browser.execute_script("window.scrollTo(0,0)")
-			browser.find_element_by_link_text('Sign in').click()
+			browser.find_element_by_link_text('Log in').click()
 		#loginlink.click()
 		print("Logged back in")
 	except NoSuchElementException as e:
@@ -158,9 +189,33 @@ def scrape_article(browser, issue, article_url, art_elem=None):
 	textbased = True
 	article.issue = issue
 
-	article.title = browser.find_element_by_class_name("article__headline").text
-	try:
-		article.sub_title = browser.find_element_by_class_name("article__subheadline").text
+	#save inline stylesheets
+	#Get all of the style properties for this element into a dictionary
+	
+	# whole_article = browser.find_element_by_class_name("css-wvfzu8")
+	# styleprops_dict = browser.execute_script('var items = {};'+
+	# 							   'var compsty = getComputedStyle(arguments[0]);'+
+	# 								'var len = compsty.length;'+
+	# 								'for (index = 0; index < len; index++)'+
+	# 								'{items [compsty[index]] = compsty.getPropertyValue(compsty[index])};'+
+	# 								'return items;', whole_article)
+	# #inlineCssText = whole_article.get_attribute("style")
+	# with open("inline-style.css", 'w') as file:
+	# 	file.write(json.dumps(styleprops_dict))
+	# return
+
+	try:# used to be "article__headline" but econ obfuscated their css classnames
+		#hope they always use the same hash or someth or this will need updating
+		article.title = browser.find_element_by_class_name("css-1bo5zl0").text
+	except NoSuchElementException as e:
+		try:
+			article.title = browser.find_element_by_xpath("//*[@id='main']//h1").text
+		except NoSuchElementException as e2:
+			print("can't get article title, skipping.")
+			return article
+
+	try:#article__subheadline
+		article.sub_title = browser.find_element_by_class_name("css-4vhs4z").text
 	except NoSuchElementException as e:
 		article.sub_title = ""
 
@@ -238,14 +293,26 @@ def login(browser):
 	loginurl = 'https://economist.com'
 	browser.get(loginurl)
 
+	#waits for the cookie message and accepts if/when it pops up
+	try:
+		browser.switch_to_frame("sp_message_iframe_617100")
+		WebDriverWait(browser, 5).until(EC.element_to_be_clickable((By.XPATH,'//button[@title="Accept"]'))).click()
+		browser.switch_to_default_content()
+	except TimeoutException as e:
+		print("TimeOut waiting for cookie dialogue")
+	except NoSuchFrameException as e:
+		print("No cookie dialogue detected")
+
 	#THESE LOGINS AREN"T TO A PAID ACCOUNT
 	#execute manual one of 3 manual recordings
 	rec_path = "econ/recordings/login" + str(randint(1,3)) +".rec"
 
 	#THIS LOGIN IS TO A PAID ACCOUNT
-	rec_path = "econ/recordings/login-paid.rec"
+	rec_path = "econ/recordings/banishcookiefast.rec"
+	#rec_path = "econ/recordings/login-paid.rec"
 
 	#rec_path = "econ/recordings/loginfast.rec"
+	time.sleep(1)
 	Playback.playback(os.path.abspath(rec_path), 1)
 
 #returns a requests session with my auth cookies set
@@ -279,6 +346,9 @@ def transform_link(orig_link, current_issue_date= None, static=False):
 	my_link = None
 	try:
 		my_link = orig_link[orig_link.index(".com")+5:].replace("/","_")
+		idx = my_link.find("media-assets")
+		if idx != -1:
+			my_link = my_link[idx:]
 	except ValueError as e:
 		return None
 
@@ -326,7 +396,7 @@ def transform_href_link(orig_link, current_issue_date=None):
 
 	my_link = os.path.join("econ",date_str,linky_title)
 
-	print("LINKED:" + linky_title)
+	#print("LINKED:" + linky_title)
 
 	return my_link
 
@@ -362,6 +432,12 @@ def sanitize_html(html, issue_date =None, get_inside_main=False):
 	#remove links to share article
 	for share in soup.find_all("div", {"class": "layout-article-sharing"}):
 		share.extract()
+
+	#remove annoying banner. After css hashing :/
+	for listenbanner in soup.find_all("div", {"class": "css-1uzxrld"}):
+		listenbanner.extract()
+	for listenbanner in soup.find_all("div", {"class": "css-11m9t22"}):
+		listenbanner.extract()
 
 
 	for m in soup.select('meta'):
@@ -399,7 +475,43 @@ def get_blank_economist_browser():
 	#start a browser session
 	chrome_options = webdriver.ChromeOptions()
 	chrome_options.add_argument("--disable-infobars")
+	#chrome_options.add_argument("--headless")
 	browser = webdriver.Chrome('/home/eamon/repos/ehome/chromedriver', chrome_options=chrome_options)
 
 	browser.get('https://economist.com')
 
+def scrape_this_week():
+	#check if there is likely a new edition. this should be run on a friday
+	now = datetime.today()
+	if now.weekday() == 4:
+		oneday = timedelta(day=1)
+		datestr = (now + oneday).strftime('%Y-%m-%d')
+		scrape(datestr)
+
+
+def delete_old_job_executions(max_age=604_800):
+	"""This job deletes all apscheduler job executions older than `max_age` from the database."""
+	DjangoJobExecution.objects.delete_old_job_executions(max_age)
+
+def setup_timed_scraping():
+	scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)
+	scheduler.add_jobstore(DjangoJobStore(), "default")
+
+	scheduler.add_job(
+	  scrape_this_week,
+	  trigger=CronTrigger(day_of_week="fri", hour="06", minute="00"), 
+	  id="scrape_this_week", 
+	  max_instances=1,
+	  replace_existing=True,
+	)
+
+
+	scheduler.add_job(
+	  delete_old_job_executions,
+	  trigger=CronTrigger(
+		day_of_week="fri", hour="05", minute="00"
+	  ),  
+	  id="delete_old_job_executions",
+	  max_instances=1,
+	  replace_existing=True,
+	)

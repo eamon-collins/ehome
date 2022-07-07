@@ -5,6 +5,8 @@ import time
 
 
 from .models import Article, Issue
+from .crawl import scrape
+import econ.crawl as crawl
 from ehome.views import authenticate_user
 import ehome.settings as settings
 
@@ -17,12 +19,12 @@ def index(request):
 	if not user:
 		return HttpResponseRedirect('/login')
 
-	#scrape("2022-01-01")
-	#scrape("2022-01-08")
-	# scrape("2022-01-15")
-	# scrape("2022-01-22")
+#"2022-07-02", "2022-06-25","2022-06-18",
+	# dates = [ "2022-06-25"]
+	# for date in dates:
+	# 	scrape(date)
 
-	#get_blank_economist_browser()
+	#crawl.get_blank_economist_browser()
 
 
 	#get all Issues in the database
@@ -65,7 +67,9 @@ def serve_article(request, issue_date, linky_title):
 	try:
 		issue = Issue.objects.get(date = issue_date)
 	except Issue.DoesNotExist:
-		return HttpResponse("can't find issue associated with article")
+		issue = None
+		print("can't find issue associated with article")
+		#return HttpResponse("can't find issue associated with article")
 
 	return render(request, 'article_main.html', {'issue': issue,
 												'article' : article})
@@ -81,5 +85,8 @@ def weekly_edition(request):
 	if not user:
 		return HttpResponseRedirect('/login')
 
-	return HttpResponseRedirect("/econ/2022-01-22/")
+	last_edition = Issue.objects.order_by('-date')[0].date
+	datestr = last_edition.strftime('%Y-%m-%d')
+
+	return HttpResponseRedirect("/econ/"+datestr+"/")
 

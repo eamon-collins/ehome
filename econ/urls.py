@@ -5,6 +5,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path, register_converter
 from datetime import datetime
 
+
 class DateConverter:
     regex = '\d{4}-\d{2}-\d{2}'
 

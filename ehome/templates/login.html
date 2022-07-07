@@ -3,34 +3,28 @@
 {% load static %}
 {% block body_block %}
 <head>
+    <link rel="stylesheet" href="{% static 'login.css' %}">
+   <link rel="icon" href="{% static 'favicon.ico' %}" sizes="16x16 32x32 64x64">
     <meta charset="UTF-8">
-    <title>Login Here</title>
+    <title>Login</title>
 </head>
 <body>
-    <div class="container">
-    <div id="heading-breadcrumbs">
-            <div class="container">
-                <div class="row">
-                    <div class="col-md-7">
-                        <h1>Login</h1>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="center">
+            <img width="305" height="154" viewBox="0 0 305 154" src="/static/eaconomist.png" id="ds-economist-logo" aria-labelledby="ds-economist-logo-title" class="ds-masthead-logo"><title id="ds-economist-logo-title">The Eaconomist</title>
+            </img>
         <div style="width:400px; margin:0 auto;">
-            <h2>Enter Account Information:</h2>
             <form method="post">{% csrf_token %}
                     <div class="well">
                         {% for field in form %}
                             <div class="form-group col-xs-12">
                                 {{ field.errors }}
-                                <label>{{ field.label }}:</label>
+                               <!--  <label>{{ field.label }}:</label> -->
                                 <div>
                                     {{ field }}
                                 </div>
                             </div>
                         {% endfor %}
-                        <center><input id="submit" type="submit" value="Submit" class="btn btn-info"/></center>
+                        <center><input id="submit" type="submit" value="login" class="btn btn-info"/></center>
                     </div>
             </form>
         </div>
